@@ -6,7 +6,9 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.{BroadcastHub, Flow, Keep, MergeHub, Source}
 import java.net.URI
 import javax.inject._
+import models.{GameResponse, GameUpdate}
 import play.api.Logger
+import play.api.libs.json._
 import play.api.mvc._
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -17,8 +19,6 @@ class GameController @Inject()(controllerComponents: ControllerComponents)
                                mat: Materializer,
                                executionContext: ExecutionContext)
         extends AbstractController(controllerComponents) with SameOriginCheck {
-
-    private type WSMessage = String
 
     val logger: Logger = Logger(getClass)
     private implicit val logging: LoggingAdapter = Logging(actorSystem.eventStream, logger.underlyingLogger.getName)
@@ -33,22 +33,41 @@ class GameController @Inject()(controllerComponents: ControllerComponents)
     private val (chatSink, chatSource) = {
         // Don't log MergeHub$ProducerFailed as error if the client disconnects.
         // recoverWithRetries -1 is essentially "recoverWith"
-        val source = MergeHub.source[WSMessage]
+        val source = MergeHub.source[JsValue]
                 .log("source")
                 // Let's also do some input sanitization to avoid XSS attacks
                 //          .map(inputSanitizer.sanitize)
                 .recoverWithRetries(-1, { case _: Exception => Source.empty })
 
-        val sink = BroadcastHub.sink[WSMessage]
-        source.map(s => s"echo: $s").toMat(sink)(Keep.both).run()
+        val sink = BroadcastHub.sink[JsValue]
+        source.map(message => handleMessage(message)).toMat(sink)(Keep.both).run()
     }
 
-    private val userFlow: Flow[WSMessage, WSMessage, _] = {
+    private def handleMessage(message: JsValue): JsValue = {
+        Json.fromJson[GameUpdate](message) match {
+            case JsSuccess(update: GameUpdate, _: JsPath) =>
+                logger.info("received game update: " + update.toString)
+//                logger.info("data: " + Json.fromJson[List[String]](update.data))
+                update.updateType match {
+                    case "hello" => Json.toJson(GameResponse("hello", 55))
+                    case "ping" => Json.toJson(GameResponse("pong"))
+                    case _ =>
+                        val msg: String = s"unrecognized update type '${update.updateType}'"
+                        logger.error(msg)
+                        Json.obj("error" -> msg)
+                }
+            case e@JsError(_) =>
+                logger.error(s"error parsing game update: ${JsError.toJson(e)}")
+                JsError.toJson(e)
+        }
+    }
+
+    private val userFlow: Flow[JsValue, JsValue, _] = {
         Flow.fromSinkAndSource(chatSink, chatSource)
     }
 
     def ws: WebSocket = {
-        WebSocket.acceptOrResult[WSMessage, WSMessage] {
+        WebSocket.acceptOrResult[JsValue, JsValue] {
             case rh if sameOriginCheck(rh) =>
                 Future.successful(userFlow).map { flow =>
                     Right(flow)
