@@ -11,6 +11,7 @@ $(document).ready(function () {
     conn.onopen = function (event) {
         console.log("ws connection established");
         sendGameUpdate("hello", null)
+        sendGameUpdate("guess", {index: 12})
         setInterval(() => sendGameUpdate("ping", null), 20 * SECOND);
     };
 
@@ -27,6 +28,7 @@ $(document).ready(function () {
     conn.onerror = (error) => console.log(error);
 
     $(window).on('beforeunload', function () {
+        sendGameUpdate("bye", null)
         conn.close();
     });
 
@@ -39,8 +41,19 @@ $(document).ready(function () {
 
     function receiveGameResponse(jsonMessage) {
         console.log("received message from server:", jsonMessage);
-        if (jsonMessage.responseType === "hello") {
-            userID = jsonMessage.userID;
+        switch (jsonMessage.updateType) {
+            case "hello":
+                if (userID === -1) {
+                    userID = jsonMessage.userID;
+                }
+                if (typeof jsonMessage.data !== "undefined") {
+                    console.log("received game data");
+                }
+                break;
+            case "pong":
+                break;
+            default:
+                console.error(`illegal game update type ${jsonMessage.updateType}`)
         }
     }
 

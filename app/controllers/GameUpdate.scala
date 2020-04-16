@@ -1,17 +1,12 @@
-package models
+package controllers
 
 import play.api.libs.json._
 
-case class GameUpdate(updateType: String, userID: Int, data: JsValue)
+case class GameUpdate(updateType: String, userID: Int = 0, data: Option[JsObject] = None)
 
 object GameUpdate {
     implicit val gameUpdateReads: Reads[GameUpdate] = Json.reads[GameUpdate]
-}
-
-case class GameResponse(responseType: String, userID: Int = 0)
-
-object GameResponse {
-    implicit val gameResponseWrites: Writes[GameResponse] = Json.writes[GameResponse]
+    implicit val gameUpdateWrites: Writes[GameUpdate] = Json.writes[GameUpdate]
 }
 
 //class UpdateType private(val raw: String) extends AnyVal {

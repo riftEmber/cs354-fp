@@ -6,15 +6,17 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.{BroadcastHub, Flow, Keep, MergeHub, Source}
 import java.net.URI
 import javax.inject._
-import models.{GameResponse, GameUpdate}
+import models.Game
 import play.api.Logger
 import play.api.libs.json._
 import play.api.mvc._
 import scala.concurrent.{ExecutionContext, Future}
+import scala.math._
+import scala.util.Random
 
 
 @Singleton
-class GameController @Inject()(controllerComponents: ControllerComponents)
+class GameController @Inject()(controllerComponents: ControllerComponents, random: Random)
                               (implicit actorSystem: ActorSystem,
                                mat: Materializer,
                                executionContext: ExecutionContext)
@@ -22,6 +24,7 @@ class GameController @Inject()(controllerComponents: ControllerComponents)
 
     val logger: Logger = Logger(getClass)
     private implicit val logging: LoggingAdapter = Logging(actorSystem.eventStream, logger.underlyingLogger.getName)
+    private val game = Game()
 
     def index: Action[AnyContent] = Action { implicit request: RequestHeader =>
         val webSocketUrl = routes.GameController.ws().webSocketURL()
@@ -46,11 +49,26 @@ class GameController @Inject()(controllerComponents: ControllerComponents)
     private def handleMessage(message: JsValue): JsValue = {
         Json.fromJson[GameUpdate](message) match {
             case JsSuccess(update: GameUpdate, _: JsPath) =>
-                logger.info("received game update: " + update.toString)
-//                logger.info("data: " + Json.fromJson[List[String]](update.data))
+                logger.info(s"received $update")
                 update.updateType match {
-                    case "hello" => Json.toJson(GameResponse("hello", 55))
-                    case "ping" => Json.toJson(GameResponse("pong"))
+                    case "hello" =>
+                        val userID = genUserID
+                        game.players.append(userID)
+                        var gameData: Option[JsObject] = None
+                        if (game.players.size == game.RequiredPlayers) {
+                            game.start()
+                            gameData = Some(new JsObject(game.board.zipWithIndex
+                                    .map({ case (square, index) => (index.toString, Json.toJson(square)) }).toMap))
+                        }
+                        Json.toJson(GameUpdate("hello", userID, gameData))
+                    case "ping" => Json.toJson(GameUpdate("pong", update.userID))
+                    case "guess" =>
+                        val data = update.data.get
+                        game.guess(data.value("index").as[Int])
+                        Json.toJson(GameUpdate("pong", update.userID))
+                    case "bye" =>
+                        logger.error(s"player ${update.userID} disconnected before game end! entering inconsistent state")
+                        new JsObject(Map[String, JsValue]())
                     case _ =>
                         val msg: String = s"unrecognized update type '${update.updateType}'"
                         logger.error(msg)
@@ -61,6 +79,8 @@ class GameController @Inject()(controllerComponents: ControllerComponents)
                 JsError.toJson(e)
         }
     }
+
+    private def genUserID: Int = max(1, abs(random.nextInt()))
 
     private val userFlow: Flow[JsValue, JsValue, _] = {
         Flow.fromSinkAndSource(chatSink, chatSource)
