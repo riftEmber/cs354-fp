@@ -52,23 +52,27 @@ class GameController @Inject()(controllerComponents: ControllerComponents, rando
                 logger.info(s"received $update")
                 update.updateType match {
                     case "hello" =>
-                        val userID = genUserID
-                        game.players.append(userID)
-                        var gameData: Option[JsObject] = None
-                        if (game.players.size == game.RequiredPlayers) {
-                            game.start()
-                            gameData = Some(new JsObject(game.board.zipWithIndex
-                                    .map({ case (square, index) => (index.toString, Json.toJson(square)) }).toMap))
+                        if (game.isRunning) {
+                            Json.toJson(GameUpdate("gameFull", update.userID))
+                        } else {
+                            val userID = genUserID
+                            game.addPlayer(userID)
+                            var gameData: Option[JsObject] = None
+                            if (game.isFull) {
+                                game.start()
+                                gameData = Some(new JsObject(game.board.zipWithIndex
+                                        .map({ case (square, index) => (index.toString, Json.toJson(square)) }).toMap))
+                            }
+                            Json.toJson(GameUpdate("hello", userID, gameData))
                         }
-                        Json.toJson(GameUpdate("hello", userID, gameData))
                     case "ping" => Json.toJson(GameUpdate("pong", update.userID))
                     case "guess" =>
-                        val data = update.data.get
-                        game.guess(data.value("index").as[Int])
-                        Json.toJson(GameUpdate("pong", update.userID))
+                        val data = update.data.get.as[JsObject]
+                        Json.toJson(GameUpdate("guessResult", update.userID,
+                            Some(Json.toJson(game.guess(data.value("index").as[Int], update.userID)))))
                     case "bye" =>
                         logger.error(s"player ${update.userID} disconnected before game end! entering inconsistent state")
-                        new JsObject(Map[String, JsValue]())
+                        Json.toJson(GameUpdate("pong"))
                     case _ =>
                         val msg: String = s"unrecognized update type '${update.updateType}'"
                         logger.error(msg)
