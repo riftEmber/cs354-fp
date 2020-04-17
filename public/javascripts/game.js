@@ -51,8 +51,20 @@ $(document).ready(function () {
     function receiveGameUpdate(jsonMessage) {
         console.log("received message from server:", jsonMessage);
         switch (jsonMessage.updateType) {
+            case "hello":
+                if (userID <= 0) {
+                    // assign initial user ID
+                    userID = jsonMessage.userID;
+                }
+                if (jsonMessage.data["data"] != null) {
+                    updateGame(jsonMessage.data["data"]);
+                }
+                updatePlayers(jsonMessage.data["players"]);
+                if (jsonMessage.data["turn"] != null) {
+                    updateTurn(jsonMessage.data["turn"]);
+                }
+                break;
             case "guessResult":
-                console.log(jsonMessage.data);
                 if (jsonMessage.data["valid"]) {
                     const squareColor = jsonMessage.data["color"].toLowerCase();
                     const square = $(`#square-${jsonMessage.data["index"]}`);
@@ -61,24 +73,27 @@ $(document).ready(function () {
                         "color": (squareColor === "black" ? "white" : "black")
                     });
                     square.text("");
+                } else if (jsonMessage.userID === userID) {
+                    displayNotification("Invalid guess");
                 }
                 break;
-            case "hello":
-                if (userID <= 0) {
-                    userID = jsonMessage.userID;
+            case "clue":
+                if (jsonMessage.data["valid"]) {
+                    updateTurn(jsonMessage.data["turn"]);
+                    displayNotification(`clue given: ${jsonMessage.data.clue}, ${jsonMessage.data.numGuesses}`);
+                    $("#clueDisplay").text(`${jsonMessage.data.clue}, ${jsonMessage.data.numGuesses} guesses`);
+                    $("#clueContainer").fadeIn();
+                } else if (jsonMessage.userID === userID) {
+                    displayNotification("Invalid clue, try again");
+                    $("#clueForm").fadeIn();
                 }
-                if (jsonMessage.data["data"] != null) {
-                    updateBoard(jsonMessage.data["data"]);
-                }
-                updatePlayers(jsonMessage.data["players"]);
                 break;
             case "bye":
                 updatePlayers(jsonMessage.data["players"]);
                 if (jsonMessage.data["stopGame"]) {
+                    stopGame()
                     displayNotification("Game aborted due to player disconnect");
                 }
-                break;
-            case "pong":
                 break;
             case "gameFull":
                 if (jsonMessage.userID === userID) {
@@ -86,8 +101,24 @@ $(document).ready(function () {
                     conn.close();
                 }
                 break;
+            case "pong":
+                break;
             default:
                 console.error(`illegal game update type ${jsonMessage.updateType}`)
+        }
+    }
+
+    function updateTurn(player) {
+        turn = player.userID;
+        $("#turn").text(`${player.userID}${turn === userID ? " (you)" : ""}`);
+        displayNotification(`${player.userID}'s turn begins - ${player.role === "GUESSER" ? "make guesses" : "give a clue"}!`);
+        const clueForm = $("#clueForm");
+        if (turn === userID && player.role === "CLUE_GIVER") {
+            clueForm.fadeIn();
+            $("#submitClue").click(function () {
+                sendGameUpdate("clue", {clue: $("#clue").val(), numGuesses: $("#number").val()});
+                clueForm.fadeOut();
+            });
         }
     }
 
@@ -99,8 +130,12 @@ $(document).ready(function () {
         for (let i = 0; i < REQUIRED_PLAYERS; i++) {
             if (`${i}` in playerData) {
                 const info = playerData[i];
+                if (info.userID === userID) {
+                    role = info.role;
+                    console.log(`got role of ${role}`);
+                }
                 playerHTML += `<tr class="player" style="background-color: ${info.color.toLowerCase()}">`;
-                playerHTML += `<td>${i + 1}: ${info.userID} - ${info.role === "GUESSER" ? "Guesser" : "Clue-giver"}${info.userID === userID ? " (you)" : ""}</td>`
+                playerHTML += `<td>${i + 1}: ${info.userID}${("role" in info) ? ` - ${info["role"]}` : ""}${info.userID === userID ? " (you)" : ""}</td>`
             } else {
                 playerHTML += '<tr class="player">';
                 playerHTML += `<td class="placeholder">${i + 1}: waiting for player...</td>`;
@@ -110,8 +145,9 @@ $(document).ready(function () {
         playerTable.html(playerHTML);
     }
 
-    function updateBoard(gameData) {
-        const dim = Math.sqrt(Object.keys(gameData).length);
+    function updateGame(boardData) {
+        $("#clueContainer").fadeOut();
+        const dim = Math.sqrt(Object.keys(boardData).length);
         const board = $("#board");
         board.hide();
         board.html("");
@@ -125,7 +161,7 @@ $(document).ready(function () {
                 }
                 row = "<tr>";
             }
-            row += `<td id="square-${i}" class="square">${gameData[i]["word"]}</td>`;
+            row += `<td id="square-${i}" class="square">${boardData[i]["word"]}</td>`;
         }
         row += "</tr>";
         board.append(row);
@@ -147,10 +183,16 @@ $(document).ready(function () {
         notifyBar.show();
         setTimeout(function () {
             notifyBar.fadeOut();
-        }, 2.5 * SECOND);
+        }, 3 * SECOND);
+    }
+
+    function stopGame() {
+        turn = -1;
     }
 
     let userID = -1;
+    let turn = -1;
+    let role = ""
 
 
     displayNotification("Game loaded");

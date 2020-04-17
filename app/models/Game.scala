@@ -9,10 +9,11 @@ import scala.util.Random
 
 class Game {
     val BoardDim = 5
-    val RequiredPlayers = 2
+    val RequiredPlayers = 4
     var board = new Array[Square](BoardDim * BoardDim)
-    val players: ListBuffer[Player] = ListBuffer[Player]()
+    var players: ListBuffer[Player] = ListBuffer[Player]()
     var isRunning = false
+    var turn: Option[Player] = None
 
     val logger: Logger = Logger(getClass)
 
@@ -41,16 +42,28 @@ class Game {
             Square(Color.GREY), Square(Color.GREY), Square(Color.GREY), Square(Color.GREY), Square(Color.GREY), Square(Color.GREY), Square(Color.GREY)
         ).toList).toArray
         isRunning = true;
+        val blues = players.filter(p => p.color == Color.BLUE)
+        blues.head.role = Some(Role.CLUE_GIVER)
+        blues.last.role = Some(Role.GUESSER)
+        val reds = players.filter(p => p.color == Color.RED)
+        reds.head.role = Some(Role.CLUE_GIVER)
+        reds.last.role = Some(Role.GUESSER)
+        players = ListBuffer[Player](blues.head, blues.last, reds.head, reds.last)
+        turn = Some(blues.head)
     }
 
     def makeGuess(index: Int, playerID: Int): GuessResult = {
         val player = players.find(p => p.userID == playerID).get
-        logger.info(s"guess made at $index")
-        revealSquare(index) match {
-            case Some(correctColor: Color) if correctColor == player.color => GuessResult(index, valid = true, correct = true, Some(correctColor))
+        if (!isRunning || turn.get != player || player.role.get != Role.GUESSER) {
+            GuessResult(index, valid = false, correct = false, None)
+        } else {
+            logger.info(s"guess made at $index")
+            revealSquare(index) match {
+                case Some(correctColor: Color) if correctColor == player.color => GuessResult(index, valid = true, correct = true, Some(correctColor))
 //            case Some(black: Color) if black == Color.BLACK => GuessResult(valid = true, correct = false, Some(black))
-            case Some(otherColor: Color) => GuessResult(index, valid = true, correct = false, Some(otherColor))
-            case None => GuessResult(index, valid = false, correct = false, None)
+                case Some(otherColor: Color) => GuessResult(index, valid = true, correct = false, Some(otherColor))
+                case None => GuessResult(index, valid = false, correct = false, None)
+            }
         }
     }
 
@@ -62,6 +75,10 @@ class Game {
             board(index).revealed = true;
             Some[Color](board(index).color)
         }
+    }
+
+    def makeClue(): Unit = {
+        turn = Some(players.find(p => p.color == turn.get.color && p.role.get == Role.GUESSER).get)
     }
 
 }
@@ -89,7 +106,7 @@ object Square {
     implicit val squareWrites: Writes[Square] = Json.writes[Square]
 }
 
-case class Player(userID: Int, color: Color, role: Option[Role])
+case class Player(userID: Int, color: Color, var role: Option[Role])
 
 object Player {
     implicit val playerWrites: Writes[Player] = Json.writes[Player]

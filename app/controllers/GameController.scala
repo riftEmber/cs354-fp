@@ -6,13 +6,13 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.{BroadcastHub, Flow, Keep, MergeHub, Source}
 import java.net.URI
 import javax.inject._
-import models.Game
+import models.{Game, Role}
 import play.api.Logger
 import play.api.libs.json._
 import play.api.mvc._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.math._
-import scala.util.Random
+import scala.util.{Random, Try}
 
 
 @Singleton
@@ -57,31 +57,45 @@ class GameController @Inject()(controllerComponents: ControllerComponents, rando
                         } else {
                             val userID = genUserID
                             game.addPlayer(userID)
-                            var gameData: Option[JsObject] = None
+                            var boardData: Option[JsObject] = None
                             if (game.isFull) {
                                 game.start()
-                                gameData = Some(new JsObject(game.board.zipWithIndex
+                                boardData = Some(new JsObject(game.board.zipWithIndex
                                         .map({ case (square, index) => (index.toString, Json.toJson(square)) }).toMap))
                             }
                             Json.toJson(GameUpdate("hello", userID,
-                                Some(Json.obj("data" -> gameData, "players" -> Json.toJson(game.players)))))
+                                Some(Json.obj("data" -> boardData, "players" -> Json.toJson(game.players), "turn" -> game.turn))))
                         }
-                    case "ping" => Json.toJson(GameUpdate("pong", update.userID))
                     case "guess" =>
                         val data = update.data.get.as[JsObject]
                         Json.toJson(GameUpdate("guessResult", update.userID,
                             Some(Json.toJson(game.makeGuess(data.value("index").as[Int], update.userID)))))
+                    case "clue" =>
+                        val data = update.data.get.as[JsObject]
+                        val numGuesses = Try(data.value("numGuesses").as[String].toInt).toOption.getOrElse(-1)
+                        val inputValid = !data.value("clue").as[String].isEmpty && numGuesses > 0
+                        var clueValid = false;
+                        if (inputValid && update.userID == game.turn.get.userID && game.turn.get.role.get == Role.CLUE_GIVER) {
+                            game.makeClue()
+                            clueValid = true
+                        }
+                        Json.toJson(GameUpdate("clue", update.userID,
+                            Some(Json.obj("valid" -> clueValid,
+                                "clue" -> data.value("clue"),
+                                "numGuesses" -> numGuesses,
+                                "turn" -> game.turn))))
                     case "bye" =>
                         game.removePlayer(update.userID)
                         var stopped = false;
                         if (game.isRunning) {
-                            logger.error(s"player ${update.userID} disconnected before game end!")
+                            logger.info(s"player ${update.userID} disconnected before game end!")
                             game.isRunning = false;
                             stopped = true;
 //                            Json.toJson(GameUpdate("gameEnd", update.userID,
 //                                Some(Json.obj("clean" -> false, "winner" -> Json.toJson(None: Option[Color])))))
                         }
                         Json.toJson(GameUpdate("bye", update.userID, Some(Json.obj("stopGame" -> stopped, "players" -> Json.toJson(game.players)))))
+                    case "ping" => Json.toJson(GameUpdate("pong", update.userID))
                     case _ =>
                         val msg: String = s"unrecognized update type '${update.updateType}'"
                         logger.error(msg)
