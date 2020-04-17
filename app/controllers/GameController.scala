@@ -4,19 +4,21 @@ import akka.actor.ActorSystem
 import akka.event.{Logging, LoggingAdapter}
 import akka.stream.Materializer
 import akka.stream.scaladsl.{BroadcastHub, Flow, Keep, MergeHub, Source}
+import assets.BackupWords
 import java.net.URI
 import javax.inject._
-import models.Game
 import play.api.Logger
 import play.api.libs.json._
+import play.api.libs.ws.{WSClient, WSRequest}
 import play.api.mvc._
-import scala.concurrent.{ExecutionContext, Future}
-import scala.math._
+import scala.collection.mutable.ListBuffer
+import scala.concurrent.duration._
+import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.Random
 
 
 @Singleton
-class GameController @Inject()(controllerComponents: ControllerComponents, random: Random)
+class GameController @Inject()(wsClient: WSClient, controllerComponents: ControllerComponents, random: Random)
                               (implicit actorSystem: ActorSystem,
                                mat: Materializer,
                                executionContext: ExecutionContext)
@@ -24,11 +26,12 @@ class GameController @Inject()(controllerComponents: ControllerComponents, rando
 
     val logger: Logger = Logger(getClass)
     private implicit val logging: LoggingAdapter = Logging(actorSystem.eventStream, logger.underlyingLogger.getName)
-    private val game = Game()
+    private val WordnikKey = "WORDNIK_API_KEY"
+    private val game = models.Game()
 
     def index: Action[AnyContent] = Action { implicit request: RequestHeader =>
         val webSocketUrl = routes.GameController.ws().webSocketURL()
-        logger.info(s"WebSocket URL: $webSocketUrl")
+        logger.debug(s"WebSocket URL: $webSocketUrl")
         Ok(views.html.index(webSocketUrl))
     }
 
@@ -58,7 +61,7 @@ class GameController @Inject()(controllerComponents: ControllerComponents, rando
                             game.addPlayer(update.userID)
                             var boardData: Option[JsObject] = None
                             if (game.isFull) {
-                                game.start()
+                                game.start(genWordList(scala.math.pow(game.BoardDim, 2).toInt))
                                 boardData = Some(new JsObject(game.board.zipWithIndex
                                         .map({ case (square, index) => (index.toString, Json.toJson(square)) }).toMap))
                             }
@@ -81,8 +84,8 @@ class GameController @Inject()(controllerComponents: ControllerComponents, rando
                             logger.info(s"player ${update.userID} disconnected before game end!")
                             game.isRunning = false;
                             stopped = true;
-//                            Json.toJson(GameUpdate("gameEnd", update.userID,
-//                                Some(Json.obj("clean" -> false, "winner" -> Json.toJson(None: Option[Color])))))
+                            //                            Json.toJson(GameUpdate("gameEnd", update.userID,
+                            //                                Some(Json.obj("clean" -> false, "winner" -> Json.toJson(None: Option[Color])))))
                         }
                         Json.toJson(GameUpdate("bye", update.userID, Some(Json.obj("stopGame" -> stopped, "players" -> Json.toJson(game.players)))))
                     case "ping" => Json.toJson(GameUpdate("pong", update.userID))
@@ -97,7 +100,34 @@ class GameController @Inject()(controllerComponents: ControllerComponents, rando
         }
     }
 
-    private def genUserID: Int = max(1, abs(random.nextInt()))
+    private def genWordList(length: Int): ListBuffer[String] = {
+        var words = ListBuffer[String]()
+        var i = 0
+        sys.env.get(WordnikKey) match {
+            case Some(key) =>
+                while (words.size < length && i < 5) {
+                    val request: WSRequest = wsClient.url(s"https://api.wordnik.com/v4/words.json/randomWords?hasDictionaryDef=true&includePartOfSpeech=noun&minCorpusCount=25000&minDictionaryCount=5&maxDictionaryCount=-1&minLength=4&maxLength=12&limit=25&api_key=$key")
+                    val result = request.get().map { response =>
+                        response.json.as[ListBuffer[JsValue]].foreach { x =>
+                            val word = (x \ "word").as[String]
+                            if (word.charAt(0) == word.charAt(0).toLower) {
+                                words += word
+                            }
+                        }
+                    }
+                    Await.ready(result, 5.seconds)
+                    i += 1
+                }
+                if (words.size >= length) {
+                    words
+                } else {
+                    logger.error("giving up on wordlist generation after 5 attempts")
+                    BackupWords.wordList
+                }
+            case None =>
+                BackupWords.wordList
+        }
+    }
 
     private val userFlow: Flow[JsValue, JsValue, _] = {
         Flow.fromSinkAndSource(chatSink, chatSource)
@@ -162,9 +192,9 @@ trait SameOriginCheck {
         try {
             val url = new URI(origin)
             val validHosts = List("localhost", "infinite-mountain-96832.herokuapp.com")
-//            val validPorts = List(9000)
-//            logger.info(s"origin is ${url.getHost}:${url.getPort}")
-            validHosts.contains(url.getHost)// && validPorts.contains(url.getPort)
+            //            val validPorts = List(9000)
+            //            logger.info(s"origin is ${url.getHost}:${url.getPort}")
+            validHosts.contains(url.getHost) // && validPorts.contains(url.getPort)
         } catch {
             case e: Exception => false
         }

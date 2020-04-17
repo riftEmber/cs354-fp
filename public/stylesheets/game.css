@@ -33,7 +33,7 @@ html, body {
     color: lightgrey;
 }
 
-#clueContainer, #clueForm, #guessesContainer {
+#clueContainer, #clueForm, #guessesContainer, #turnContainer {
     display: none;
 }
 

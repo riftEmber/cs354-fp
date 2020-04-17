@@ -34,8 +34,9 @@ class Game {
 
     def isFull: Boolean = players.length == RequiredPlayers
 
-    def start(): Unit = {
+    def start(wordList: ListBuffer[String]): Unit = {
         logger.info("starting game")
+        implicit val words: Iterator[String] = wordList.iterator
         board = Random.shuffle(Array[Square](
             Square(Color.BLUE), Square(Color.BLUE), Square(Color.BLUE), Square(Color.BLUE), Square(Color.BLUE), Square(Color.BLUE), Square(Color.BLUE), Square(Color.BLUE), Square(Color.BLUE),
             Square(Color.RED), Square(Color.RED), Square(Color.RED), Square(Color.RED), Square(Color.RED), Square(Color.RED), Square(Color.RED), Square(Color.RED),
@@ -139,8 +140,8 @@ object GuessResult {
 case class Square(word: String, color: Color, var revealed: Boolean = false)
 
 object Square {
-    def apply(color: Color): Square = {
-        new Square("asdf", color)
+    def apply(color: Color)(implicit words: Iterator[String]): Square = {
+        new Square(words.next, color)
     }
 
     implicit val squareWrites: Writes[Square] = Json.writes[Square]

@@ -120,6 +120,7 @@ $(document).ready(function () {
     function updateTurn(player) {
         turn = player.userID;
         $("#turn").text(`${player.userID}${turn === userID ? " (you)" : ""}`);
+        $("#turnContainer").fadeIn();
         displayNotification(`${player.userID}'s turn begins - ${player.role === "GUESSER" ? "make guesses" : "give a clue"}!`);
         const clueForm = $("#clueForm");
         if (turn === userID) {
@@ -199,6 +200,7 @@ $(document).ready(function () {
 
     function stopGame() {
         turn = -1;
+        $("#turnContainer").hide();
     }
 
     $("#submitClue").click(function () {
