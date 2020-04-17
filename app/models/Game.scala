@@ -5,7 +5,7 @@ import models.Role.Role
 import play.api.Logger
 import play.api.libs.json._
 import scala.collection.mutable.ListBuffer
-import scala.util.Random
+import scala.util.{Random, Try}
 
 class Game {
     val BoardDim = 5
@@ -14,6 +14,7 @@ class Game {
     var players: ListBuffer[Player] = ListBuffer[Player]()
     var isRunning = false
     var turn: Option[Player] = None
+    var guessesRemaining: Int = -1;
 
     val logger: Logger = Logger(getClass)
 
@@ -54,16 +55,23 @@ class Game {
 
     def makeGuess(index: Int, playerID: Int): GuessResult = {
         val player = players.find(p => p.userID == playerID).get
-        if (!isRunning || turn.get != player || player.role.get != Role.GUESSER) {
-            GuessResult(index, valid = false, correct = false, None)
+        if (!isRunning || turn.get != player || player.role.get != Role.GUESSER || guessesRemaining < 1) {
+            GuessResult(index, valid = false, correct = false, None, guessesRemaining, None)
         } else {
             logger.info(s"guess made at $index")
-            revealSquare(index) match {
-                case Some(correctColor: Color) if correctColor == player.color => GuessResult(index, valid = true, correct = true, Some(correctColor))
-//            case Some(black: Color) if black == Color.BLACK => GuessResult(valid = true, correct = false, Some(black))
-                case Some(otherColor: Color) => GuessResult(index, valid = true, correct = false, Some(otherColor))
-                case None => GuessResult(index, valid = false, correct = false, None)
+            val guessResult = revealSquare(index) match {
+                case Some(correctColor: Color) if correctColor == player.color =>
+                    guessesRemaining -= 1
+                    guesserTurnTransition()
+                    GuessResult(index, valid = true, correct = true, Some(correctColor), guessesRemaining, turn)
+                //            case Some(black: Color) if black == Color.BLACK => GuessResult(valid = true, correct = false, Some(black))
+                case Some(otherColor: Color) =>
+                    guessesRemaining = 0
+                    guesserTurnTransition()
+                    GuessResult(index, valid = true, correct = false, Some(otherColor), guessesRemaining, turn)
+                case None => GuessResult(index, valid = false, correct = false, None, guessesRemaining, None)
             }
+            guessResult
         }
     }
 
@@ -77,8 +85,26 @@ class Game {
         }
     }
 
-    def makeClue(): Unit = {
-        turn = Some(players.find(p => p.color == turn.get.color && p.role.get == Role.GUESSER).get)
+    private def guesserTurnTransition(): Unit = {
+        if (guessesRemaining == 0) {
+            if (turn.get.color == Color.BLUE) {
+                turn = players.find(p => p.color == Color.RED && p.role.get == Role.CLUE_GIVER)
+            } else if (turn.get.color == Color.RED) {
+                turn = players.find(p => p.color == Color.BLUE && p.role.get == Role.CLUE_GIVER)
+            }
+        }
+    }
+
+    def attemptClue(clue: String, numGuessesRaw: String, playerID: Int): Boolean = {
+        val numGuesses = Try(numGuessesRaw.toInt).toOption.getOrElse(-1)
+        if (!clue.isEmpty && numGuesses > 0
+                && playerID == turn.get.userID && turn.get.role.get == Role.CLUE_GIVER) {
+            turn = Some(players.find(p => p.color == turn.get.color && p.role.get == Role.GUESSER).get)
+            guessesRemaining = numGuesses + 1
+            true
+        } else {
+            false
+        }
     }
 
 }
@@ -89,7 +115,7 @@ object Game {
     }
 }
 
-case class GuessResult(index: Int, valid: Boolean, correct: Boolean, color: Option[Color])
+case class GuessResult(index: Int, valid: Boolean, correct: Boolean, color: Option[Color], guessesRemaining: Int, turn: Option[Player])
 
 object GuessResult {
 

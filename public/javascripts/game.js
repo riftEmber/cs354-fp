@@ -73,6 +73,12 @@ $(document).ready(function () {
                         "color": (squareColor === "black" ? "white" : "black")
                     });
                     square.text("");
+                    $("#guessesDisplay").text(jsonMessage.data["guessesRemaining"]);
+                    if (jsonMessage.data["guessesRemaining"] < 1) {
+                        displayNotification("Guessing completed");
+                        $("#guessesContainer").fadeOut();
+                        updateTurn(jsonMessage.data["turn"]);
+                    }
                 } else if (jsonMessage.userID === userID) {
                     displayNotification("Invalid guess");
                 }
@@ -83,6 +89,8 @@ $(document).ready(function () {
                     displayNotification(`clue given: ${jsonMessage.data.clue}, ${jsonMessage.data.numGuesses}`);
                     $("#clueDisplay").text(`${jsonMessage.data.clue}, ${jsonMessage.data.numGuesses} guesses`);
                     $("#clueContainer").fadeIn();
+                    $("#guessesContainer").fadeIn();
+                    $("#guessesDisplay").text(jsonMessage.data.numGuesses);
                 } else if (jsonMessage.userID === userID) {
                     displayNotification("Invalid clue, try again");
                     $("#clueForm").fadeIn();
@@ -113,12 +121,10 @@ $(document).ready(function () {
         $("#turn").text(`${player.userID}${turn === userID ? " (you)" : ""}`);
         displayNotification(`${player.userID}'s turn begins - ${player.role === "GUESSER" ? "make guesses" : "give a clue"}!`);
         const clueForm = $("#clueForm");
-        if (turn === userID && player.role === "CLUE_GIVER") {
-            clueForm.fadeIn();
-            $("#submitClue").click(function () {
-                sendGameUpdate("clue", {clue: $("#clue").val(), numGuesses: $("#number").val()});
-                clueForm.fadeOut();
-            });
+        if (turn === userID) {
+            if (player.role === "CLUE_GIVER") {
+                clueForm.fadeIn();
+            }
         }
     }
 
@@ -165,10 +171,10 @@ $(document).ready(function () {
         }
         row += "</tr>";
         board.append(row);
-        board.fadeIn(0.75 * SECOND);
+        board.fadeIn("slow");
 
-        const squares = $(".square");
         const percentageSpace = 100 / dim;
+        const squares = $(".square");
         squares.css({"min-width": `${percentageSpace}%`, "height": `${percentageSpace}%`});
         squares.click(function () {
             sendGameUpdate("guess", {index: parseInt($(this).attr("id").replace("square-", ""))});
@@ -190,7 +196,19 @@ $(document).ready(function () {
         turn = -1;
     }
 
-    let userID = -1;
+    $("#submitClue").click(function () {
+        const clue = $("#clue");
+        const number = $("#number");
+        console.log("sending clue over")
+        sendGameUpdate("clue", {clue: clue.val(), numGuesses: number.val()});
+        $("#clueForm").fadeOut("default", function () {
+            clue.val("");
+            number.val("");
+        });
+    });
+
+
+    let userID = Math.floor(Math.random() * 2 ** 31 - 1) + 1;
     let turn = -1;
     let role = ""
 

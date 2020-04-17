@@ -6,13 +6,13 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.{BroadcastHub, Flow, Keep, MergeHub, Source}
 import java.net.URI
 import javax.inject._
-import models.{Game, Role}
+import models.Game
 import play.api.Logger
 import play.api.libs.json._
 import play.api.mvc._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.math._
-import scala.util.{Random, Try}
+import scala.util.Random
 
 
 @Singleton
@@ -55,15 +55,14 @@ class GameController @Inject()(controllerComponents: ControllerComponents, rando
                         if (game.isRunning) {
                             Json.toJson(GameUpdate("gameFull", update.userID))
                         } else {
-                            val userID = genUserID
-                            game.addPlayer(userID)
+                            game.addPlayer(update.userID)
                             var boardData: Option[JsObject] = None
                             if (game.isFull) {
                                 game.start()
                                 boardData = Some(new JsObject(game.board.zipWithIndex
                                         .map({ case (square, index) => (index.toString, Json.toJson(square)) }).toMap))
                             }
-                            Json.toJson(GameUpdate("hello", userID,
+                            Json.toJson(GameUpdate("hello", update.userID,
                                 Some(Json.obj("data" -> boardData, "players" -> Json.toJson(game.players), "turn" -> game.turn))))
                         }
                     case "guess" =>
@@ -72,18 +71,11 @@ class GameController @Inject()(controllerComponents: ControllerComponents, rando
                             Some(Json.toJson(game.makeGuess(data.value("index").as[Int], update.userID)))))
                     case "clue" =>
                         val data = update.data.get.as[JsObject]
-                        val numGuesses = Try(data.value("numGuesses").as[String].toInt).toOption.getOrElse(-1)
-                        val inputValid = !data.value("clue").as[String].isEmpty && numGuesses > 0
-                        var clueValid = false;
-                        if (inputValid && update.userID == game.turn.get.userID && game.turn.get.role.get == Role.CLUE_GIVER) {
-                            game.makeClue()
-                            clueValid = true
-                        }
-                        Json.toJson(GameUpdate("clue", update.userID,
-                            Some(Json.obj("valid" -> clueValid,
-                                "clue" -> data.value("clue"),
-                                "numGuesses" -> numGuesses,
-                                "turn" -> game.turn))))
+                        val clueValid = game.attemptClue(data.value("clue").as[String], data.value("numGuesses").as[String], update.userID)
+                        logger.info(s"sending ${GameUpdate("clue", update.userID, Some(Json.obj("valid" -> clueValid, "clue" -> data.value("clue"),
+                            "numGuesses" -> game.guessesRemaining, "turn" -> game.turn)))}")
+                        Json.toJson(GameUpdate("clue", update.userID, Some(Json.obj("valid" -> clueValid, "clue" -> data.value("clue"),
+                            "numGuesses" -> game.guessesRemaining, "turn" -> game.turn))))
                     case "bye" =>
                         game.removePlayer(update.userID)
                         var stopped = false;
