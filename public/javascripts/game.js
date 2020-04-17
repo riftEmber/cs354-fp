@@ -1,5 +1,6 @@
 $(document).ready(function () {
     const SECOND = 1000;
+    const REQUIRED_PLAYERS = 4;
 
     if (!("WebSocket" in window)) {
         console.log("A browser supporting WebSockets is required");
@@ -34,7 +35,7 @@ $(document).ready(function () {
     function sendGameUpdate(updateType, data = null) {
         const jsonMessage = {updateType: updateType, userID: userID, data: data}
         if (conn.readyState !== WebSocket.OPEN) {
-            console.error("cannot send following message as WebSocket is not open", jsonMessage);
+            console.error("cannot send message as WebSocket is not open", jsonMessage);
             return;
         }
         const message = JSON.stringify(jsonMessage)
@@ -49,34 +50,66 @@ $(document).ready(function () {
                 console.log(jsonMessage.data);
                 if (jsonMessage.data["valid"]) {
                     const squareColor = jsonMessage.data["color"].toLowerCase();
-                    $(`#square-${jsonMessage.data["index"]}`).css({
+                    const square = $(`#square-${jsonMessage.data["index"]}`);
+                    square.css({
                         "background-color": squareColor,
                         "color": (squareColor === "black" ? "white" : "black")
                     });
+                    square.text("");
                 }
                 break;
             case "hello":
                 if (userID <= 0) {
                     userID = jsonMessage.userID;
                 }
-                if (typeof jsonMessage.data !== "undefined") {
-                    prepareBoard(jsonMessage.data);
+                if (jsonMessage.data["data"] != null) {
+                    prepareBoard(jsonMessage.data["data"]);
+                }
+                updatePlayers(jsonMessage.data["players"]);
+                break;
+            case "bye":
+                updatePlayers(jsonMessage.data["players"]);
+                if (jsonMessage.data["stopGame"]) {
+                    notifyPlayer("Game aborted due to player disconnect");
                 }
                 break;
             case "pong":
                 break;
             case "gameFull":
-                console.error("cannot join game, it is already running!");
-                conn.close();
+                if (jsonMessage.userID === userID) {
+                    console.error("cannot join game, it is already running!");
+                    conn.close();
+                }
                 break;
             default:
                 console.error(`illegal game update type ${jsonMessage.updateType}`)
         }
     }
 
+    function updatePlayers(playerInfo) {
+        console.log("player info:", playerInfo);
+        const playerTable = $("#players");
+        let playerHTML = "";
+        playerHTML += "<tr><th>Players</th></tr>";
+        for (let i = 0; i < REQUIRED_PLAYERS; i++) {
+            if (`${i}` in playerInfo) {
+                const info = playerInfo[i];
+                playerHTML += `<tr class="player" style="background-color: ${info.color.toLowerCase()}">`;
+                playerHTML += `<td>${i + 1}: ${info.userID} - ${info.role === "GUESSER" ? "Guesser" : "Clue-giver"}${info.userID === userID ? " (you)" : ""}</td>`
+            } else {
+                playerHTML += '<tr class="player">';
+                playerHTML += `<td class="placeholder">${i + 1}: waiting for player...</td>`;
+            }
+            playerHTML += "</tr>";
+        }
+        playerTable.html(playerHTML);
+    }
+
     function prepareBoard(gameData) {
-        let dim = Math.sqrt(Object.keys(gameData).length);
-        let board = $("#board");
+        const dim = Math.sqrt(Object.keys(gameData).length);
+        const board = $("#board");
+        board.html("");
+        board.hide();
         let row = "";
         for (let i = 0; i < dim ** 2; i++) {
             if (i % dim === 0) {
@@ -91,14 +124,28 @@ $(document).ready(function () {
         }
         row += "</tr>";
         board.append(row);
+        board.fadeIn();
 
-        $(".square").click(function () {
+        const squares = $(".square");
+        squares.css({"min-width": `${100 / dim}%`});
+        squares.click(function () {
             sendGameUpdate("guess", {index: parseInt($(this).attr("id").replace("square-", ""))});
         });
+
+        notifyPlayer("Beginning a new game");
+    }
+
+    function notifyPlayer(message) {
+        const notifyBar = $("#notification");
+        notifyBar.text(message);
+        notifyBar.show();
+        setTimeout(function () {
+            notifyBar.fadeOut();
+        }, 2.5 * SECOND);
     }
 
     let userID = -1;
 
 
-    console.log("client-side game code loaded");
+    notifyPlayer("Game loaded");
 });

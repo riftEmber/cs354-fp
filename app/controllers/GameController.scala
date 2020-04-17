@@ -63,16 +63,25 @@ class GameController @Inject()(controllerComponents: ControllerComponents, rando
                                 gameData = Some(new JsObject(game.board.zipWithIndex
                                         .map({ case (square, index) => (index.toString, Json.toJson(square)) }).toMap))
                             }
-                            Json.toJson(GameUpdate("hello", userID, gameData))
+                            Json.toJson(GameUpdate("hello", userID,
+                                Some(Json.obj("data" -> gameData, "players" -> Json.toJson(game.players)))))
                         }
                     case "ping" => Json.toJson(GameUpdate("pong", update.userID))
                     case "guess" =>
                         val data = update.data.get.as[JsObject]
                         Json.toJson(GameUpdate("guessResult", update.userID,
-                            Some(Json.toJson(game.guess(data.value("index").as[Int], update.userID)))))
+                            Some(Json.toJson(game.makeGuess(data.value("index").as[Int], update.userID)))))
                     case "bye" =>
-                        logger.error(s"player ${update.userID} disconnected before game end! entering inconsistent state")
-                        Json.toJson(GameUpdate("pong"))
+                        game.removePlayer(update.userID)
+                        var stopped = false;
+                        if (game.isRunning) {
+                            logger.error(s"player ${update.userID} disconnected before game end!")
+                            game.isRunning = false;
+                            stopped = true;
+//                            Json.toJson(GameUpdate("gameEnd", update.userID,
+//                                Some(Json.obj("clean" -> false, "winner" -> Json.toJson(None: Option[Color])))))
+                        }
+                        Json.toJson(GameUpdate("bye", update.userID, Some(Json.obj("stopGame" -> stopped, "players" -> Json.toJson(game.players)))))
                     case _ =>
                         val msg: String = s"unrecognized update type '${update.updateType}'"
                         logger.error(msg)

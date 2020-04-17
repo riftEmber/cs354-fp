@@ -9,9 +9,9 @@ import scala.util.Random
 
 class Game {
     val BoardDim = 5
-    val RequiredPlayers = 1
+    val RequiredPlayers = 2
     var board = new Array[Square](BoardDim * BoardDim)
-    private val players: ListBuffer[Player] = ListBuffer[Player]()
+    val players: ListBuffer[Player] = ListBuffer[Player]()
     var isRunning = false
 
     val logger: Logger = Logger(getClass)
@@ -21,6 +21,13 @@ class Game {
         val blues = players.count({ case Player(_, color, _) => color == Color.BLUE })
         val color = if (reds < blues) Color.RED else Color.BLUE;
         players.append(Player(playerID, color, None))
+    }
+
+    def removePlayer(playerID: Int): Unit = {
+        val element = players.find(p => p.userID == playerID)
+        if (element.isDefined) {
+            players.remove(players.indexOf(element.get))
+        }
     }
 
     def isFull: Boolean = players.length == RequiredPlayers
@@ -36,10 +43,10 @@ class Game {
         isRunning = true;
     }
 
-    def guess(index: Int, playerID: Int): GuessResult = {
+    def makeGuess(index: Int, playerID: Int): GuessResult = {
         val player = players.find(p => p.userID == playerID).get
         logger.info(s"guess made at $index")
-        reveal(index) match {
+        revealSquare(index) match {
             case Some(correctColor: Color) if correctColor == player.color => GuessResult(index, valid = true, correct = true, Some(correctColor))
 //            case Some(black: Color) if black == Color.BLACK => GuessResult(valid = true, correct = false, Some(black))
             case Some(otherColor: Color) => GuessResult(index, valid = true, correct = false, Some(otherColor))
@@ -47,7 +54,7 @@ class Game {
         }
     }
 
-    def reveal(index: Int): Option[Color] = {
+    private def revealSquare(index: Int): Option[Color] = {
         logger.info(s"guess made at $index")
         if (board(index).revealed) {
             None
@@ -83,6 +90,10 @@ object Square {
 }
 
 case class Player(userID: Int, color: Color, role: Option[Role])
+
+object Player {
+    implicit val playerWrites: Writes[Player] = Json.writes[Player]
+}
 
 object Color extends Enumeration {
     type Color = Value

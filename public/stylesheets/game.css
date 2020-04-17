@@ -4,25 +4,36 @@ html, body {
     margin: 0;
 }
 
-table, th, td {
+#board {
+    background-color: black;
+    position: absolute;
+    top: 300px;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
     border: 2px solid grey;
+    display: none;
 }
 
-th, td {
+/* all board cells have .square */
+.square {
+    border: 2px solid grey;
+    background-color: seagreen;
     padding: 30px;
     text-align: center;
     color: black;
 }
 
-.square {
-    background-color: seagreen;
+#players, #players > tr > td, #players > tr > th {
+    border: 1px solid black;
 }
 
-#board {
-    background-color: black;
-    position: absolute;
-    top: 100px;
-    bottom: 0;
+.placeholder {
+    font-style: italic;
+    color: lightgrey;
+}
+
+#notification {
+    background-color: orange;
     width: 100%;
-    height: 100%;
 }
