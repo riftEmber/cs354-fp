@@ -6,8 +6,13 @@ $(document).ready(function () {
         console.log("A browser supporting WebSockets is required");
         return;
     }
-    const url = $("#game-script").attr("ws-url");
-    let conn = new WebSocket(url);
+    let wsUrl = $("#game-script").attr("ws-url");
+    // workaround for 'secure' request header set incorrectly
+    if (location.protocol === "https:") {
+        wsUrl = wsUrl.replace("ws://", "wss://");
+    }
+    console.log(`connecting to ${wsUrl}`);
+    let conn = new WebSocket(wsUrl);
 
     conn.onopen = function (event) {
         console.log("ws connection established");
@@ -15,7 +20,7 @@ $(document).ready(function () {
         setInterval(() => sendGameUpdate("ping"), 20 * SECOND);
     };
 
-    conn.onmessage = (messageEvent) => receiveGameResponse(JSON.parse(messageEvent.data));
+    conn.onmessage = (messageEvent) => receiveGameUpdate(JSON.parse(messageEvent.data));
 
     conn.onclose = function (closeEvent) {
         if (closeEvent.wasClean) {
@@ -43,7 +48,7 @@ $(document).ready(function () {
         conn.send(message);
     }
 
-    function receiveGameResponse(jsonMessage) {
+    function receiveGameUpdate(jsonMessage) {
         console.log("received message from server:", jsonMessage);
         switch (jsonMessage.updateType) {
             case "guessResult":
@@ -63,21 +68,21 @@ $(document).ready(function () {
                     userID = jsonMessage.userID;
                 }
                 if (jsonMessage.data["data"] != null) {
-                    prepareBoard(jsonMessage.data["data"]);
+                    updateBoard(jsonMessage.data["data"]);
                 }
                 updatePlayers(jsonMessage.data["players"]);
                 break;
             case "bye":
                 updatePlayers(jsonMessage.data["players"]);
                 if (jsonMessage.data["stopGame"]) {
-                    notifyPlayer("Game aborted due to player disconnect");
+                    displayNotification("Game aborted due to player disconnect");
                 }
                 break;
             case "pong":
                 break;
             case "gameFull":
                 if (jsonMessage.userID === userID) {
-                    console.error("cannot join game, it is already running!");
+                    displayNotification("Game already running -- try again when it's over");
                     conn.close();
                 }
                 break;
@@ -86,14 +91,14 @@ $(document).ready(function () {
         }
     }
 
-    function updatePlayers(playerInfo) {
-        console.log("player info:", playerInfo);
+    function updatePlayers(playerData) {
+        console.log("player info:", playerData);
         const playerTable = $("#players");
         let playerHTML = "";
         playerHTML += "<tr><th>Players</th></tr>";
         for (let i = 0; i < REQUIRED_PLAYERS; i++) {
-            if (`${i}` in playerInfo) {
-                const info = playerInfo[i];
+            if (`${i}` in playerData) {
+                const info = playerData[i];
                 playerHTML += `<tr class="player" style="background-color: ${info.color.toLowerCase()}">`;
                 playerHTML += `<td>${i + 1}: ${info.userID} - ${info.role === "GUESSER" ? "Guesser" : "Clue-giver"}${info.userID === userID ? " (you)" : ""}</td>`
             } else {
@@ -105,11 +110,11 @@ $(document).ready(function () {
         playerTable.html(playerHTML);
     }
 
-    function prepareBoard(gameData) {
+    function updateBoard(gameData) {
         const dim = Math.sqrt(Object.keys(gameData).length);
         const board = $("#board");
-        board.html("");
         board.hide();
+        board.html("");
         let row = "";
         for (let i = 0; i < dim ** 2; i++) {
             if (i % dim === 0) {
@@ -124,18 +129,19 @@ $(document).ready(function () {
         }
         row += "</tr>";
         board.append(row);
-        board.fadeIn();
+        board.fadeIn(0.75 * SECOND);
 
         const squares = $(".square");
-        squares.css({"min-width": `${100 / dim}%`});
+        const percentageSpace = 100 / dim;
+        squares.css({"min-width": `${percentageSpace}%`, "height": `${percentageSpace}%`});
         squares.click(function () {
             sendGameUpdate("guess", {index: parseInt($(this).attr("id").replace("square-", ""))});
         });
 
-        notifyPlayer("Beginning a new game");
+        displayNotification("Beginning a new game");
     }
 
-    function notifyPlayer(message) {
+    function displayNotification(message) {
         const notifyBar = $("#notification");
         notifyBar.text(message);
         notifyBar.show();
@@ -147,5 +153,5 @@ $(document).ready(function () {
     let userID = -1;
 
 
-    notifyPlayer("Game loaded");
+    displayNotification("Game loaded");
 });

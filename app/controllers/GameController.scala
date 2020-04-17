@@ -158,8 +158,9 @@ trait SameOriginCheck {
         try {
             val url = new URI(origin)
             val validHosts = List("localhost", "infinite-mountain-96832.herokuapp.com")
+//            val validPorts = List(9000)
 //            logger.info(s"origin is ${url.getHost}:${url.getPort}")
-            validHosts.contains(url.getHost)
+            validHosts.contains(url.getHost)// && validPorts.contains(url.getPort)
         } catch {
             case e: Exception => false
         }
