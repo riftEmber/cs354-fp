@@ -72,8 +72,6 @@ class GameController @Inject()(controllerComponents: ControllerComponents, rando
                     case "clue" =>
                         val data = update.data.get.as[JsObject]
                         val clueValid = game.attemptClue(data.value("clue").as[String], data.value("numGuesses").as[String], update.userID)
-                        logger.info(s"sending ${GameUpdate("clue", update.userID, Some(Json.obj("valid" -> clueValid, "clue" -> data.value("clue"),
-                            "numGuesses" -> game.guessesRemaining, "turn" -> game.turn)))}")
                         Json.toJson(GameUpdate("clue", update.userID, Some(Json.obj("valid" -> clueValid, "clue" -> data.value("clue"),
                             "numGuesses" -> game.guessesRemaining, "turn" -> game.turn))))
                     case "bye" =>

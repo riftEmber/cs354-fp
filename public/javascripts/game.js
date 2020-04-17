@@ -56,31 +56,32 @@ $(document).ready(function () {
                     // assign initial user ID
                     userID = jsonMessage.userID;
                 }
+                updatePlayers(jsonMessage.data["players"]);
                 if (jsonMessage.data["data"] != null) {
                     updateGame(jsonMessage.data["data"]);
                 }
-                updatePlayers(jsonMessage.data["players"]);
                 if (jsonMessage.data["turn"] != null) {
                     updateTurn(jsonMessage.data["turn"]);
                 }
                 break;
             case "guessResult":
                 if (jsonMessage.data["valid"]) {
-                    const squareColor = jsonMessage.data["color"].toLowerCase();
                     const square = $(`#square-${jsonMessage.data["index"]}`);
-                    square.css({
-                        "background-color": squareColor,
-                        "color": (squareColor === "black" ? "white" : "black")
-                    });
-                    square.text("");
+                    square.addClass(jsonMessage.data["color"].toLowerCase());
+                    square.children(".word").fadeOut();
                     $("#guessesDisplay").text(jsonMessage.data["guessesRemaining"]);
+                    if (jsonMessage.data["winner"] != null) {
+                        displayNotification(`${jsonMessage.data["winner"]} team wins!`);
+                        $(".word").fadeIn();
+                        stopGame();
+                        break;
+                    }
                     if (jsonMessage.data["guessesRemaining"] < 1) {
                         displayNotification("Guessing completed");
                         $("#guessesContainer").fadeOut();
+                        $("#clueContainer").fadeOut();
                         updateTurn(jsonMessage.data["turn"]);
                     }
-                } else if (jsonMessage.userID === userID) {
-                    displayNotification("Invalid guess");
                 }
                 break;
             case "clue":
@@ -167,7 +168,11 @@ $(document).ready(function () {
                 }
                 row = "<tr>";
             }
-            row += `<td id="square-${i}" class="square">${boardData[i]["word"]}</td>`;
+            const color = boardData[i]["color"].toLowerCase();
+            const style = `style="background-color: '${color}'; color: '${color === "black" ? "white" : "black"}'"`;
+            console.log("role: " + role);
+            console.log(`style info: ${style}`);
+            row += `<td id="square-${i}" class="square ${role === "CLUE_GIVER" ? color : ""}"><span class="word">${boardData[i]["word"]}</span></td>`;
         }
         row += "</tr>";
         board.append(row);

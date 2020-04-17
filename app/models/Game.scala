@@ -56,20 +56,23 @@ class Game {
     def makeGuess(index: Int, playerID: Int): GuessResult = {
         val player = players.find(p => p.userID == playerID).get
         if (!isRunning || turn.get != player || player.role.get != Role.GUESSER || guessesRemaining < 1) {
-            GuessResult(index, valid = false, correct = false, None, guessesRemaining, None)
+            GuessResult(index, valid = false, correct = false, None, guessesRemaining, None, None)
         } else {
             logger.info(s"guess made at $index")
             val guessResult = revealSquare(index) match {
                 case Some(correctColor: Color) if correctColor == player.color =>
                     guessesRemaining -= 1
                     guesserTurnTransition()
-                    GuessResult(index, valid = true, correct = true, Some(correctColor), guessesRemaining, turn)
-                //            case Some(black: Color) if black == Color.BLACK => GuessResult(valid = true, correct = false, Some(black))
+                    GuessResult(index, valid = true, correct = true, Some(correctColor), guessesRemaining, turn, findWinner)
+                case Some(Color.BLACK) =>
+                    guessesRemaining = 0
+                    GuessResult(index, valid = true, correct = false, Some(Color.BLACK), guessesRemaining, turn,
+                        Some(if (turn.get.color == Color.BLUE) Color.RED else Color.BLUE))
                 case Some(otherColor: Color) =>
                     guessesRemaining = 0
                     guesserTurnTransition()
-                    GuessResult(index, valid = true, correct = false, Some(otherColor), guessesRemaining, turn)
-                case None => GuessResult(index, valid = false, correct = false, None, guessesRemaining, None)
+                    GuessResult(index, valid = true, correct = false, Some(otherColor), guessesRemaining, turn, findWinner)
+                case None => GuessResult(index, valid = false, correct = false, None, guessesRemaining, None, None)
             }
             guessResult
         }
@@ -95,6 +98,16 @@ class Game {
         }
     }
 
+    private def findWinner: Option[Color] = {
+        if (!board.exists(s => s.color == Color.BLUE && !s.revealed)) {
+            Some(Color.BLUE)
+        } else if (!board.exists(s => s.color == Color.RED && !s.revealed)) {
+            Some(Color.RED)
+        } else {
+            None
+        }
+    }
+
     def attemptClue(clue: String, numGuessesRaw: String, playerID: Int): Boolean = {
         val numGuesses = Try(numGuessesRaw.toInt).toOption.getOrElse(-1)
         if (!clue.isEmpty && numGuesses > 0
@@ -115,7 +128,8 @@ object Game {
     }
 }
 
-case class GuessResult(index: Int, valid: Boolean, correct: Boolean, color: Option[Color], guessesRemaining: Int, turn: Option[Player])
+case class GuessResult(index: Int, valid: Boolean, correct: Boolean, color: Option[Color], guessesRemaining: Int,
+                       turn: Option[Player], winner: Option[Color])
 
 object GuessResult {
 
