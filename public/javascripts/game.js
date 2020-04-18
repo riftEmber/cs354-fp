@@ -30,7 +30,7 @@ $(document).ready(function () {
         }
     };
 
-    conn.onerror = (error) => console.log(error);
+    conn.onerror = (error) => console.error(error);
 
     $(window).on('beforeunload', function () {
         sendGameUpdate("bye")
@@ -66,18 +66,22 @@ $(document).ready(function () {
                 break;
             case "guessResult":
                 if (jsonMessage.data["valid"]) {
-                    const square = $(`#square-${jsonMessage.data["index"]}`);
-                    square.addClass(jsonMessage.data["color"].toLowerCase());
-                    square.children(".word").fadeOut();
-                    $("#guessesDisplay").text(jsonMessage.data["guessesRemaining"]);
-                    if (jsonMessage.data["winner"] != null) {
-                        displayNotification(`${jsonMessage.data["winner"]} team wins!`);
-                        $(".word").fadeIn();
-                        stopGame();
-                        break;
+                    const index = jsonMessage.data["index"];
+                    if (index !== -1) {
+                        const square = $(`#square-${index}`);
+                        square.addClass(jsonMessage.data["color"].toLowerCase());
+                        square.children(".word").fadeOut();
+                        $("#guessesDisplay").text(jsonMessage.data["guessesRemaining"]);
+                        if (jsonMessage.data["winner"] != null) {
+                            displayNotification(`${jsonMessage.data["winner"]} team wins!`);
+                            $(".word").fadeIn();
+                            stopGame();
+                            break;
+                        }
                     }
                     if (jsonMessage.data["guessesRemaining"] < 1) {
                         displayNotification("Guessing completed");
+                        $("#stopGuessing").fadeOut();
                         $("#guessesContainer").fadeOut();
                         $("#clueContainer").fadeOut();
                         updateTurn(jsonMessage.data["turn"]);
@@ -119,19 +123,23 @@ $(document).ready(function () {
 
     function updateTurn(player) {
         turn = player.userID;
-        $("#turn").text(`${player.userID}${turn === userID ? " (you)" : ""}`);
+        const turnDisplay = $("#turn");
+        turnDisplay.removeClass("blue", "red");
+        turnDisplay.addClass(player.color.toLowerCase());
+        turnDisplay.text(`${player.userID}${turn === userID ? " (you)" : ""}`);
         $("#turnContainer").fadeIn();
         displayNotification(`${player.userID}'s turn begins - ${player.role === "GUESSER" ? "make guesses" : "give a clue"}!`);
         const clueForm = $("#clueForm");
         if (turn === userID) {
             if (player.role === "CLUE_GIVER") {
                 clueForm.fadeIn();
+            } else {
+                $("#stopGuessing").fadeIn();
             }
         }
     }
 
     function updatePlayers(playerData) {
-        console.log("player info:", playerData);
         const playerTable = $("#players");
         let playerHTML = "";
         playerHTML += "<tr><th>Players</th></tr>";
@@ -140,9 +148,8 @@ $(document).ready(function () {
                 const info = playerData[i];
                 if (info.userID === userID) {
                     role = info.role;
-                    console.log(`got role of ${role}`);
                 }
-                playerHTML += `<tr class="player" style="background-color: ${info.color.toLowerCase()}">`;
+                playerHTML += `<tr class="player ${info.color.toLowerCase()}">`;
                 playerHTML += `<td>${i + 1}: ${info.userID}${("role" in info) ? ` - ${info["role"]}` : ""}${info.userID === userID ? " (you)" : ""}</td>`
             } else {
                 playerHTML += '<tr class="player">';
@@ -169,11 +176,7 @@ $(document).ready(function () {
                 }
                 row = "<tr>";
             }
-            const color = boardData[i]["color"].toLowerCase();
-            const style = `style="background-color: '${color}'; color: '${color === "black" ? "white" : "black"}'"`;
-            console.log("role: " + role);
-            console.log(`style info: ${style}`);
-            row += `<td id="square-${i}" class="square ${role === "CLUE_GIVER" ? color : ""}"><span class="word">${boardData[i]["word"]}</span></td>`;
+            row += `<td id="square-${i}" class="square ${role === "CLUE_GIVER" ? boardData[i]["color"].toLowerCase() : ""}"><span class="word">${boardData[i]["word"]}</span></td>`;
         }
         row += "</tr>";
         board.append(row);
@@ -203,10 +206,13 @@ $(document).ready(function () {
         $("#turnContainer").hide();
     }
 
+    $("#stopGuessing").click(function () {
+        sendGameUpdate("guess", {index: -1});
+    });
+
     $("#submitClue").click(function () {
         const clue = $("#clue");
         const number = $("#number");
-        console.log("sending clue over")
         sendGameUpdate("clue", {clue: clue.val(), numGuesses: number.val()});
         $("#clueForm").fadeOut("default", function () {
             clue.val("");

@@ -2,6 +2,7 @@ html, body {
     height: 100%;
     width: 100%;
     margin: 0;
+    background-color: darkgrey;
 }
 
 #board {
@@ -18,7 +19,7 @@ html, body {
 /* all board cells have .square */
 .square {
     border: 2px solid grey;
-    background-color: seagreen;
+    background-color: darkseagreen;
     padding: 30px;
     text-align: center;
     color: black;
@@ -30,10 +31,10 @@ html, body {
 
 .placeholder {
     font-style: italic;
-    color: lightgrey;
+    color: grey;
 }
 
-#clueContainer, #clueForm, #guessesContainer, #turnContainer {
+#clueContainer, #clueForm, #guessesContainer, #turnContainer, #stopGuessing {
     display: none;
 }
 
@@ -43,7 +44,7 @@ html, body {
 }
 
 .blue {
-    background-color: blue;
+    background-color: dodgerblue;
 }
 
 .red {
@@ -51,7 +52,7 @@ html, body {
 }
 
 .grey {
-    background-color: grey;
+    background-color: dimgrey;
 }
 
 .black {

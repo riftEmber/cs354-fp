@@ -58,6 +58,9 @@ class Game {
         val player = players.find(p => p.userID == playerID).get
         if (!isRunning || turn.get != player || player.role.get != Role.GUESSER || guessesRemaining < 1) {
             GuessResult(index, valid = false, correct = false, None, guessesRemaining, None, None)
+        } else if (index == -1) {
+            guesserTurnTransition(true)
+            GuessResult(index, valid = true, correct = false, None, guessesRemaining, turn, None)
         } else {
             logger.info(s"guess made at $index")
             val guessResult = revealSquare(index) match {
@@ -89,8 +92,9 @@ class Game {
         }
     }
 
-    private def guesserTurnTransition(): Unit = {
-        if (guessesRemaining == 0) {
+    private def guesserTurnTransition(early: Boolean = false): Unit = {
+        if (early || guessesRemaining == 0) {
+            guessesRemaining = 0;
             if (turn.get.color == Color.BLUE) {
                 turn = players.find(p => p.color == Color.RED && p.role.get == Role.CLUE_GIVER)
             } else if (turn.get.color == Color.RED) {
