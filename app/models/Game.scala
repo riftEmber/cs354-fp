@@ -63,7 +63,7 @@ class Game {
             GuessResult(index, valid = true, correct = false, None, guessesRemaining, turn, None)
         } else {
             logger.info(s"guess made at $index")
-            val guessResult = revealSquare(index) match {
+            revealSquare(index) match {
                 case Some(correctColor: Color) if correctColor == player.color =>
                     guessesRemaining -= 1
                     guesserTurnTransition()
@@ -78,7 +78,6 @@ class Game {
                     GuessResult(index, valid = true, correct = false, Some(otherColor), guessesRemaining, turn, findWinner)
                 case None => GuessResult(index, valid = false, correct = false, None, guessesRemaining, None, None)
             }
-            guessResult
         }
     }
 

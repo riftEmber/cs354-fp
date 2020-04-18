@@ -5,11 +5,15 @@ html, body {
     background-color: darkgrey;
 }
 
+#content {
+    display: grid;
+    grid-template-columns: 35% 65%;
+    grid-template-rows: 100%;
+    height: 100%;
+}
+
 #board {
     background-color: black;
-    position: absolute;
-    top: 350px;
-    bottom: 0;
     width: 100%;
     height: 100%;
     border: 2px solid grey;
@@ -20,7 +24,6 @@ html, body {
 .square {
     border: 2px solid grey;
     background-color: darkseagreen;
-    padding: 30px;
     text-align: center;
     color: black;
 }
@@ -38,9 +41,20 @@ html, body {
     display: none;
 }
 
-#notification {
+#newGame {
+    background-color: lightblue;
+}
+
+#notifications {
     background-color: orange;
-    width: 100%;
+}
+
+#notifications > * {
+    border: 1px solid black;
+}
+
+#notifications > :last-child {
+    background-color: orangered;
 }
 
 .blue {

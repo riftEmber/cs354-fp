@@ -1,6 +1,7 @@
 $(document).ready(function () {
     const SECOND = 1000;
     const REQUIRED_PLAYERS = 4;
+    const NOTIFICATIONS = 5;
 
     if (!("WebSocket" in window)) {
         console.log("A browser supporting WebSockets is required");
@@ -16,7 +17,7 @@ $(document).ready(function () {
 
     conn.onopen = function (event) {
         console.log("ws connection established");
-        sendGameUpdate("hello", {startNew: false})
+        sendGameUpdate("hello", {startNew: false});
         setInterval(() => sendGameUpdate("ping"), 20 * SECOND);
     };
 
@@ -33,17 +34,17 @@ $(document).ready(function () {
     conn.onerror = (error) => console.error(error);
 
     $(window).on('beforeunload', function () {
-        sendGameUpdate("bye")
+        sendGameUpdate("bye");
         conn.close();
     });
 
     function sendGameUpdate(updateType, data = null) {
-        const jsonMessage = {updateType: updateType, userID: userID, data: data}
+        const jsonMessage = {updateType: updateType, userID: userID, data: data};
         if (conn.readyState !== WebSocket.OPEN) {
             console.error("cannot send message as WebSocket is not open", jsonMessage);
             return;
         }
-        const message = JSON.stringify(jsonMessage)
+        const message = JSON.stringify(jsonMessage);
         console.log("sending message to server:", jsonMessage);
         conn.send(message);
     }
@@ -52,9 +53,15 @@ $(document).ready(function () {
         console.log("received message from server:", jsonMessage);
         switch (jsonMessage.updateType) {
             case "hello":
-                if (userID <= 0) {
-                    // assign initial user ID
-                    userID = jsonMessage.userID;
+                // handle reconnect on new game start
+                let includesMe = false;
+                jsonMessage.data["players"].forEach(function (player) {
+                    if (player.userID === userID) {
+                        includesMe = true;
+                    }
+                });
+                if (!includesMe) {
+                    location.reload();
                 }
                 updatePlayers(jsonMessage.data["players"]);
                 if (jsonMessage.data["data"] != null) {
@@ -70,17 +77,21 @@ $(document).ready(function () {
                     if (index !== -1) {
                         const square = $(`#square-${index}`);
                         square.addClass(jsonMessage.data["color"].toLowerCase());
-                        square.children(".word").fadeOut();
+                        const wordContainer = square.children(".word");
+                        wordContainer.css({color: "grey"});
+                        displayNotification(`Player ${userID} guessed the word '${wordContainer.text()}' ${jsonMessage.data["correct"] ? "" : "in"}correctly!`);
+                        if (jsonMessage.data["color"] === "BLACK") {
+                            displayNotification(`Player ${userID} selected the assassin!`);
+                        }
                         $("#guessesDisplay").text(jsonMessage.data["guessesRemaining"]);
                         if (jsonMessage.data["winner"] != null) {
                             displayNotification(`${jsonMessage.data["winner"]} team wins!`);
-                            $(".word").fadeIn();
                             stopGame();
                             break;
                         }
                     }
                     if (jsonMessage.data["guessesRemaining"] < 1) {
-                        displayNotification("Guessing completed");
+                        displayNotification("Guessing done");
                         $("#stopGuessing").fadeOut();
                         $("#guessesContainer").fadeOut();
                         $("#clueContainer").fadeOut();
@@ -91,7 +102,7 @@ $(document).ready(function () {
             case "clue":
                 if (jsonMessage.data["valid"]) {
                     updateTurn(jsonMessage.data["turn"]);
-                    displayNotification(`clue given: ${jsonMessage.data.clue}, ${jsonMessage.data.numGuesses}`);
+                    displayNotification(`clue given: ${jsonMessage.data.clue}, ${jsonMessage.data.numGuesses - 1} (${jsonMessage.data.numGuesses} guesses)`);
                     $("#clueDisplay").text(`${jsonMessage.data.clue}, ${jsonMessage.data.numGuesses} guesses`);
                     $("#clueContainer").fadeIn();
                     $("#guessesContainer").fadeIn();
@@ -105,7 +116,7 @@ $(document).ready(function () {
                 updatePlayers(jsonMessage.data["players"]);
                 if (jsonMessage.data["stopGame"]) {
                     const aborted = turn !== -1;
-                    stopGame()
+                    stopGame();
                     if (aborted) {
                         displayNotification("Game aborted due to player disconnect");
                     }
@@ -127,18 +138,23 @@ $(document).ready(function () {
     function updateTurn(player) {
         turn = player.userID;
         const turnDisplay = $("#turn");
-        turnDisplay.removeClass("blue", "red");
+        turnDisplay.removeClass("blue red");
         turnDisplay.addClass(player.color.toLowerCase());
-        turnDisplay.text(`${player.userID}${turn === userID ? " (you)" : ""}`);
         $("#turnContainer").fadeIn();
-        displayNotification(`${player.userID}'s turn begins - ${player.role === "GUESSER" ? "make guesses" : "give a clue"}!`);
-        const clueForm = $("#clueForm");
-        if (turn === userID) {
+        const me = turn === userID
+        if (me) {
+            turnDisplay.text(`You (${player.userID})`);
+            turnDisplay.css({"font-weight": "bold"});
+            displayNotification(`Your turn has started — ${player.role === "GUESSER" ? "make guesses" : "give a clue"}!`);
             if (player.role === "CLUE_GIVER") {
-                clueForm.fadeIn();
+                $("#clueForm").fadeIn();
             } else {
                 $("#stopGuessing").fadeIn();
             }
+        } else {
+            turnDisplay.text(`${player.userID}`);
+            turnDisplay.css({"font-weight": "normal"});
+            displayNotification(`${player.userID}'s turn has started`);
         }
     }
 
@@ -152,7 +168,7 @@ $(document).ready(function () {
                     role = info.role;
                 }
                 playerHTML += `<tr class="player ${info.color.toLowerCase()}">`;
-                playerHTML += `<td>${i + 1}: ${info.userID}${("role" in info) ? ` - ${info["role"]}` : ""}${info.userID === userID ? " (you)" : ""}</td>`
+                playerHTML += `<td>${i + 1}: ${info.userID}${("role" in info) ? ` — ${info["role"] === "GUESSER" ? "guesser" : "clue-giver"}` : ""}${info.userID === userID ? " (you)" : ""}</td>`
             } else {
                 playerHTML += '<tr class="player">';
                 playerHTML += `<td class="placeholder">${i + 1}: waiting for player...</td>`;
@@ -195,12 +211,17 @@ $(document).ready(function () {
     }
 
     function displayNotification(message) {
-        const notifyBar = $("#notification");
-        notifyBar.text(message);
+        if (notifications.length > NOTIFICATIONS) {
+            notifications.shift();
+        }
+        notifications.push(message);
+        const notifyBar = $("#notifications");
+        let notificationsHtml = "";
+        notifications.forEach(function (notification, index) {
+            notificationsHtml += `<div>${notification}</div>`;
+        });
+        notifyBar.html(notificationsHtml);
         notifyBar.show();
-        setTimeout(function () {
-            notifyBar.fadeOut();
-        }, 3 * SECOND);
     }
 
     function stopGame() {
@@ -231,6 +252,7 @@ $(document).ready(function () {
     let userID = Math.floor(Math.random() * 2 ** 31 - 1) + 1;
     let turn = -1;
     let role = "";
+    let notifications = []
 
     displayNotification("Game loaded! Word lists are fetched using the Wordnik API");
 });

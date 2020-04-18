@@ -10,21 +10,31 @@
         <link rel="stylesheet" type="text/css" href="@routes.Assets.versioned("stylesheets/game.css")">
     </head>
     <body>
-        <h1>Game</h1>
-        <button type="button" id="newGame">New Game</button>
-        <div id="notification"></div>
-        <table id="board"></table>
-        <table id="players"></table>
-        <div id="turnContainer">Turn: <span id="turn">waiting...</span></div>
-        <div id="clueContainer">Clue: <span id="clueDisplay">waiting...</span></div>
-        <div id="guessesContainer">Guesses remaining: <span id="guessesDisplay">waiting...</span></div>
-        <button type="button" id="stopGuessing">Stop Guessing</button>
-        <form id="clueForm">
-            <label for="clue">Clue:</label>
-            <input type="text" id="clue" name="clue">
-            <label for="number">Number:</label>
-            <input type="text" id="number" name="number">
-            <button type="button" id="submitClue" >Submit Clue</button>
-        </form>
+        <noscript><h2 class="red">This game requires JavaScript to function</h2></noscript>
+        <div id="content">
+            <div id="left">
+                <h1>Codewords</h1>
+                <button type="button" id="newGame">New Game</button>
+                <div id="notifications"></div>
+                <table id="players"></table>
+                <div id="turnContainer">Current turn: <span id="turn">waiting...</span></div>
+                <div id="clueContainer">Clue: <span id="clueDisplay">waiting...</span></div>
+                <div id="guessesContainer">Guesses remaining: <span id="guessesDisplay">waiting...</span></div>
+                <button type="button" id="stopGuessing">Stop Guessing</button>
+                <form id="clueForm">
+                    <label for="clue">Clue:</label>
+                    <input type="text" id="clue" name="clue">
+                    <br>
+                    <label for="number">Number:</label>
+                    <input type="text" id="number" name="number">
+                    <br>
+                    <button type="button" id="submitClue" >Submit Clue</button>
+                </form>
+                <div id="filler"></div>
+            </div>
+            <div id="right">
+                <table id="board"></table>
+            </div>
+        </div>
     </body>
 </html>

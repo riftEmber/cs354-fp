@@ -55,9 +55,11 @@ class GameController @Inject()(wsClient: WSClient, controllerComponents: Control
                 logger.info(s"received $update")
                 update.updateType match {
                     case "hello" =>
+                        var startedNew = false
                         // open a new game if this is the first player
                         if (game.players.isEmpty || (update.data.get \ "startNew").as[Boolean]) {
                             game = models.Game()
+                            startedNew = true
                         }
                         if (game.isRunning) {
                             Json.toJson(GameUpdate("gameFull", update.userID))
@@ -65,6 +67,7 @@ class GameController @Inject()(wsClient: WSClient, controllerComponents: Control
                             game.addPlayer(update.userID)
                             var boardData: Option[JsObject] = None
                             if (game.isFull) {
+                                logger.info(s"ready to start new game with players ${game.players}")
                                 game.start(genWordList(scala.math.pow(game.BoardDim, 2).toInt))
                                 boardData = Some(new JsObject(game.board.zipWithIndex
                                         .map({ case (square, index) => (index.toString, Json.toJson(square)) }).toMap))
@@ -87,6 +90,8 @@ class GameController @Inject()(wsClient: WSClient, controllerComponents: Control
                         if (game.isRunning) {
                             logger.info(s"player ${update.userID} disconnected before game end!")
                             stopped = true;
+                            game.turn = None
+                            game.isRunning = false;
                         }
                         Json.toJson(GameUpdate("bye", update.userID, Some(Json.obj("stopGame" -> stopped, "players" -> Json.toJson(game.players)))))
                     case "ping" => Json.toJson(GameUpdate("pong", update.userID))
@@ -111,7 +116,7 @@ class GameController @Inject()(wsClient: WSClient, controllerComponents: Control
                     val result = request.get().map { response =>
                         response.json.as[ListBuffer[JsValue]].foreach { x =>
                             val word = (x \ "word").as[String]
-                            if (word.charAt(0) == word.charAt(0).toLower) {
+                            if (word.charAt(0) == word.charAt(0).toLower && !words.contains(word)) {
                                 words += word
                             }
                         }
