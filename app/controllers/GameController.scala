@@ -27,7 +27,7 @@ class GameController @Inject()(wsClient: WSClient, controllerComponents: Control
     val logger: Logger = Logger(getClass)
     private implicit val logging: LoggingAdapter = Logging(actorSystem.eventStream, logger.underlyingLogger.getName)
     private val WordnikKey = "WORDNIK_API_KEY"
-    private val game = models.Game()
+    private var game = models.Game()
 
     def index: Action[AnyContent] = Action { implicit request: RequestHeader =>
         val webSocketUrl = routes.GameController.ws().webSocketURL()
@@ -55,6 +55,10 @@ class GameController @Inject()(wsClient: WSClient, controllerComponents: Control
                 logger.info(s"received $update")
                 update.updateType match {
                     case "hello" =>
+                        // open a new game if this is the first player
+                        if (game.players.isEmpty || (update.data.get \ "startNew").as[Boolean]) {
+                            game = models.Game()
+                        }
                         if (game.isRunning) {
                             Json.toJson(GameUpdate("gameFull", update.userID))
                         } else {
@@ -78,14 +82,11 @@ class GameController @Inject()(wsClient: WSClient, controllerComponents: Control
                         Json.toJson(GameUpdate("clue", update.userID, Some(Json.obj("valid" -> clueValid, "clue" -> data.value("clue"),
                             "numGuesses" -> game.guessesRemaining, "turn" -> game.turn))))
                     case "bye" =>
-                        game.removePlayer(update.userID)
+                        game.removePlayerIfExists(update.userID)
                         var stopped = false;
                         if (game.isRunning) {
                             logger.info(s"player ${update.userID} disconnected before game end!")
-                            game.isRunning = false;
                             stopped = true;
-                            //                            Json.toJson(GameUpdate("gameEnd", update.userID,
-                            //                                Some(Json.obj("clean" -> false, "winner" -> Json.toJson(None: Option[Color])))))
                         }
                         Json.toJson(GameUpdate("bye", update.userID, Some(Json.obj("stopGame" -> stopped, "players" -> Json.toJson(game.players)))))
                     case "ping" => Json.toJson(GameUpdate("pong", update.userID))

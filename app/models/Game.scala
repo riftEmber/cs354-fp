@@ -25,7 +25,7 @@ class Game {
         players.append(Player(playerID, color, None))
     }
 
-    def removePlayer(playerID: Int): Unit = {
+    def removePlayerIfExists(playerID: Int): Unit = {
         val element = players.find(p => p.userID == playerID)
         if (element.isDefined) {
             players.remove(players.indexOf(element.get))

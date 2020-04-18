@@ -16,7 +16,7 @@ $(document).ready(function () {
 
     conn.onopen = function (event) {
         console.log("ws connection established");
-        sendGameUpdate("hello")
+        sendGameUpdate("hello", {startNew: false})
         setInterval(() => sendGameUpdate("ping"), 20 * SECOND);
     };
 
@@ -104,8 +104,11 @@ $(document).ready(function () {
             case "bye":
                 updatePlayers(jsonMessage.data["players"]);
                 if (jsonMessage.data["stopGame"]) {
+                    const aborted = turn !== -1;
                     stopGame()
-                    displayNotification("Game aborted due to player disconnect");
+                    if (aborted) {
+                        displayNotification("Game aborted due to player disconnect");
+                    }
                 }
                 break;
             case "gameFull":
@@ -140,9 +143,8 @@ $(document).ready(function () {
     }
 
     function updatePlayers(playerData) {
-        const playerTable = $("#players");
         let playerHTML = "";
-        playerHTML += "<tr><th>Players</th></tr>";
+        playerHTML += "<tr style='background-color:slategrey'><th>Players</th></tr>";
         for (let i = 0; i < REQUIRED_PLAYERS; i++) {
             if (`${i}` in playerData) {
                 const info = playerData[i];
@@ -157,7 +159,7 @@ $(document).ready(function () {
             }
             playerHTML += "</tr>";
         }
-        playerTable.html(playerHTML);
+        $("#players").html(playerHTML);
     }
 
     function updateGame(boardData) {
@@ -206,6 +208,11 @@ $(document).ready(function () {
         $("#turnContainer").hide();
     }
 
+    $("#newGame").click(function () {
+        sendGameUpdate("hello", {startNew: true});
+        location.reload();
+    });
+
     $("#stopGuessing").click(function () {
         sendGameUpdate("guess", {index: -1});
     });
@@ -223,8 +230,7 @@ $(document).ready(function () {
 
     let userID = Math.floor(Math.random() * 2 ** 31 - 1) + 1;
     let turn = -1;
-    let role = ""
+    let role = "";
 
-
-    displayNotification("Game loaded");
+    displayNotification("Game loaded! Word lists are fetched using the Wordnik API");
 });
