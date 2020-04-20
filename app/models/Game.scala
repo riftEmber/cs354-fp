@@ -82,7 +82,6 @@ class Game {
     }
 
     private def revealSquare(index: Int): Option[Color] = {
-        logger.info(s"guess made at $index")
         if (board(index).revealed) {
             None
         } else {
@@ -136,7 +135,6 @@ case class GuessResult(index: Int, valid: Boolean, correct: Boolean, color: Opti
                        turn: Option[Player], winner: Option[Color])
 
 object GuessResult {
-
     implicit val guessResultWrites: Writes[GuessResult] = Json.writes[GuessResult]
 }
 

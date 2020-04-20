@@ -109,10 +109,11 @@ class GameController @Inject()(wsClient: WSClient, controllerComponents: Control
     private def genWordList(length: Int): ListBuffer[String] = {
         var words = ListBuffer[String]()
         var i = 0
+        val difficulty = sys.env.getOrElse("WORD_MIN_DIFFICULTY", 20000);
         sys.env.get(WordnikKey) match {
             case Some(key) =>
                 while (words.size < length && i < 5) {
-                    val request: WSRequest = wsClient.url(s"https://api.wordnik.com/v4/words.json/randomWords?hasDictionaryDef=true&includePartOfSpeech=noun&minCorpusCount=25000&minDictionaryCount=5&maxDictionaryCount=-1&minLength=4&maxLength=12&limit=25&api_key=$key")
+                    val request: WSRequest = wsClient.url(s"https://api.wordnik.com/v4/words.json/randomWords?hasDictionaryDef=true&includePartOfSpeech=noun&minCorpusCount=$difficulty&minDictionaryCount=5&maxDictionaryCount=-1&minLength=4&maxLength=12&limit=25&api_key=$key")
                     val result = request.get().map { response =>
                         response.json.as[ListBuffer[JsValue]].foreach { x =>
                             val word = (x \ "word").as[String]
@@ -131,6 +132,7 @@ class GameController @Inject()(wsClient: WSClient, controllerComponents: Control
                     BackupWords.wordList
                 }
             case None =>
+                logger.error("couldn't find Wordnik API key, using backup word list")
                 BackupWords.wordList
         }
     }
