@@ -85,7 +85,8 @@ $(document).ready(function () {
                         }
                         $("#guessesDisplay").text(jsonMessage.data["guessesRemaining"]);
                         if (jsonMessage.data["winner"] != null) {
-                            displayNotification(`${jsonMessage.data["winner"]} team wins!`);
+                            displayNotification(`${jsonMessage.data["winner"]} team wins! Hit 'new game' to play again.`);
+                            $("#newGame").css({"background-color": "green"});
                             stopGame();
                             break;
                         }
@@ -226,10 +227,12 @@ $(document).ready(function () {
 
     function stopGame() {
         turn = -1;
-        $("#turnContainer").hide();
+        $("#clueContainer, #clueForm, #guessesContainer, #turnContainer, #stopGuessing").hide();
     }
 
-    $("#newGame").click(function () {
+    const newGameButton = $("#newGame");
+    newGameButton.click(function () {
+        newGameButton.css({"background-color": "lightblue"});
         sendGameUpdate("hello", {startNew: true});
         location.reload();
     });
